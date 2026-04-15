@@ -6,9 +6,9 @@ Desk workout notifications powered by Arnold Schwarzenegger's *Get Back In Shape
 
 Exercises are organized into three tiers that unlock over time:
 
-- **Tier 1 (Weeks 1–2):** The gentlest start — chair squats, wall pushups, marching in place, calf raises, desk planks, stretches
-- **Tier 2 (Weeks 3–4):** Adds bodyweight squats, desk pushups, wall sits, lunges, glute bridges, step-ups
-- **Tier 3 (Week 5+):** The full pool — slow tempo reps, 2-minute challenges, myo-reps, mountain climbers, and more
+- **Tier 1 (Weeks 1–2):** 12 exercises — chair squats, wall pushups, marching in place, calf raises, desk planks, cat camel, bird dog, IYT raises, stretches
+- **Tier 2 (Weeks 3–4):** 13 more (25 total) — bodyweight squats, desk pushups, wall sits, lunges, glute bridges, step-ups, leg raises, spiderman lunges
+- **Tier 3 (Week 5+):** 24 more (49 total) — slow tempo reps, 2-minute challenges, myo-reps, the countdown, squat jumps, isometric holds, bear crawls, and more
 
 Within a day, exercises don't repeat until the full eligible pool has been shown. Each notification includes a motivational quote.
 
