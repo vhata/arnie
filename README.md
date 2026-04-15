@@ -29,7 +29,30 @@ python arnie.py uninstall          # Remove the LaunchAgent (keeps state and log
 python arnie.py status             # Show current tier, day count, and today's exercises
 python arnie.py log                # Print today's exercise log
 python arnie.py reset              # Reset progression back to tier 1, day 1
+python arnie.py config             # View current configuration
+python arnie.py config [options]   # Update configuration
 ```
+
+## Configuration
+
+Edit `config.json` directly, or use the CLI:
+
+```bash
+python arnie.py config --start-hour 9 --end-hour 18
+python arnie.py config --frequency 45
+python arnie.py config --tier-days 7,7
+python arnie.py config --sound Glass
+```
+
+After changing timing settings, run `python arnie.py install` to apply the new schedule.
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `start_hour` | 10 | Hour to start notifications (0–23) |
+| `end_hour` | 19 | Hour to stop notifications (0–23) |
+| `frequency_minutes` | 30 | Minutes between notifications |
+| `tier_days` | [14, 14] | Days at each tier before unlocking the next |
+| `sound` | Ping | macOS notification sound name |
 
 ## Requirements
 
@@ -43,6 +66,8 @@ No third-party packages — stdlib only.
 ```
 arnie.py        # CLI and notification logic
 exercises.py    # Exercise data, selection, and progression
+config.py       # Configuration loading, saving, and validation
+config.json     # User-editable settings
 data/
   state.json    # Tracks current tier and today's shown exercises (auto-created)
   logs/         # Daily exercise logs (auto-created)

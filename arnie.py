@@ -4,11 +4,12 @@ Arnie — Desk workout notifications from Arnold's Get Back In Shape guide.
 
 Usage:
     python arnie.py notify [--force]   Fire one notification now
-    python arnie.py install            Install the LaunchAgent (every 30 min, 10am-7pm)
+    python arnie.py install            Install the LaunchAgent
     python arnie.py uninstall          Remove the LaunchAgent
     python arnie.py status             Show current state and schedule
     python arnie.py log                Print today's exercise log
     python arnie.py reset              Reset progression to day 1
+    python arnie.py config [options]   View or update configuration
 """
 
 import argparse
@@ -21,6 +22,7 @@ import tempfile
 from datetime import date, datetime
 from pathlib import Path
 
+from config import load_config, save_config, validate_config
 from exercises import (
     EXERCISES,
     days_until_next_tier,
@@ -36,9 +38,6 @@ STATE_FILE = DATA_DIR / "state.json"
 VENV_DIR = PROJECT_DIR / ".venv"
 PLIST_NAME = "com.arnie.workout"
 PLIST_DEST = Path.home() / "Library" / "LaunchAgents" / f"{PLIST_NAME}.plist"
-
-WORK_START_HOUR = 10
-WORK_END_HOUR = 19  # 7pm — last notification at 18:30
 
 
 # --- State management ---
@@ -67,14 +66,15 @@ def save_state(state: dict):
 
 # --- Notification ---
 
-def send_notification(title: str, message: str):
+def send_notification(title: str, message: str, sound: str):
     # osascript notification strings need quotes escaped
     safe_title = title.replace('"', '\\"')
     safe_msg = message.replace('"', '\\"')
+    safe_sound = sound.replace('"', '\\"')
     subprocess.run(
         [
             "osascript", "-e",
-            f'display notification "{safe_msg}" with title "{safe_title}" sound name "Ping"',
+            f'display notification "{safe_msg}" with title "{safe_title}" sound name "{safe_sound}"',
         ],
         check=True,
     )
@@ -92,8 +92,9 @@ def append_log(exercise: dict, quote: str):
 # --- Commands ---
 
 def cmd_notify(args):
+    config = load_config()
     now = datetime.now()
-    if not args.force and not (WORK_START_HOUR <= now.hour < WORK_END_HOUR):
+    if not args.force and not (config["start_hour"] <= now.hour < config["end_hour"]):
         return  # Outside work hours, exit silently
 
     state = load_state()
@@ -104,13 +105,13 @@ def cmd_notify(args):
         state["today_shown"] = []
         state["last_date"] = today
 
-    exercise = pick_exercise(state)
+    exercise = pick_exercise(state, config["tier_days"])
     quote = pick_quote()
 
     title = f"Arnie: {exercise['name']}"
     body = f"{exercise['instruction']}\n\n{quote}"
 
-    send_notification(title, body)
+    send_notification(title, body, config["sound"])
     append_log(exercise, quote)
 
     state["today_shown"].append(exercise["id"])
@@ -123,6 +124,8 @@ def cmd_notify(args):
 
 
 def cmd_install(args):
+    config = load_config()
+
     # Create data directories
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
@@ -145,11 +148,14 @@ def cmd_install(args):
 
     venv_python = VENV_DIR / "bin" / "python3"
 
-    # Generate plist
+    # Generate plist intervals from config
+    freq = config["frequency_minutes"]
     intervals = []
-    for hour in range(WORK_START_HOUR, WORK_END_HOUR):
-        for minute in (0, 30):
+    for hour in range(config["start_hour"], config["end_hour"]):
+        minute = 0
+        while minute < 60:
             intervals.append({"Hour": hour, "Minute": minute})
+            minute += freq
 
     plist = {
         "Label": PLIST_NAME,
@@ -173,7 +179,9 @@ def cmd_install(args):
     # Load the agent
     subprocess.run(["launchctl", "unload", str(PLIST_DEST)], capture_output=True)
     subprocess.run(["launchctl", "load", str(PLIST_DEST)], check=True)
-    print(f"LaunchAgent loaded. Notifications every 30 min, {WORK_START_HOUR}:00-{WORK_END_HOUR - 1}:30.")
+    last_hour = config["end_hour"] - 1
+    last_min = 60 - freq if freq <= 60 else 0
+    print(f"LaunchAgent loaded. Notifications every {freq} min, {config['start_hour']}:00-{last_hour}:{last_min:02d}.")
     print()
     print("Test it now with: python arnie.py notify --force")
 
@@ -189,6 +197,8 @@ def cmd_uninstall(args):
 
 
 def cmd_status(args):
+    config = load_config()
+
     # LaunchAgent status
     result = subprocess.run(
         ["launchctl", "list"],
@@ -197,15 +207,22 @@ def cmd_status(args):
     agent_loaded = PLIST_NAME in result.stdout
     print(f"LaunchAgent: {'loaded' if agent_loaded else 'not loaded'}")
 
+    # Config
+    print(f"Schedule: every {config['frequency_minutes']} min, {config['start_hour']}:00-{config['end_hour'] - 1}:30")
+    tier_days_str = " + ".join(f"{d}d" for d in config["tier_days"])
+    print(f"Tier durations: {tier_days_str} (then all unlocked)")
+    print(f"Sound: {config['sound']}")
+
     # State
     state = load_state()
-    tier = get_current_tier(state["tier_start_date"])
-    remaining = days_until_next_tier(state["tier_start_date"])
+    tier = get_current_tier(state["tier_start_date"], config["tier_days"])
+    remaining = days_until_next_tier(state["tier_start_date"], config["tier_days"])
     start = state["tier_start_date"]
     days_active = (date.today() - date.fromisoformat(start)).days
+    num_tiers = len(config["tier_days"]) + 1
 
-    print(f"Day: {days_active + 1} (started {start})")
-    print(f"Current tier: {tier} of 3")
+    print(f"\nDay: {days_active + 1} (started {start})")
+    print(f"Current tier: {tier} of {num_tiers}")
     if remaining is not None:
         print(f"Next tier in: {remaining} days")
     else:
@@ -239,6 +256,49 @@ def cmd_reset(args):
     print("Progression reset to tier 1, day 1. Fresh start!")
 
 
+def cmd_config(args):
+    config = load_config()
+    changed = False
+
+    if args.start_hour is not None:
+        config["start_hour"] = args.start_hour
+        changed = True
+    if args.end_hour is not None:
+        config["end_hour"] = args.end_hour
+        changed = True
+    if args.frequency is not None:
+        config["frequency_minutes"] = args.frequency
+        changed = True
+    if args.tier_days is not None:
+        config["tier_days"] = [int(d) for d in args.tier_days.split(",")]
+        changed = True
+    if args.sound is not None:
+        config["sound"] = args.sound
+        changed = True
+
+    if changed:
+        errors = validate_config(config)
+        if errors:
+            for e in errors:
+                print(f"Error: {e}")
+            sys.exit(1)
+        save_config(config)
+        print("Config updated:")
+    else:
+        print("Current config:")
+
+    print(f"  start_hour:       {config['start_hour']}")
+    print(f"  end_hour:         {config['end_hour']}")
+    print(f"  frequency_minutes: {config['frequency_minutes']}")
+    print(f"  tier_days:        {config['tier_days']}")
+    print(f"  sound:            {config['sound']}")
+
+    if changed:
+        timing_changed = any(x is not None for x in [args.start_hour, args.end_hour, args.frequency])
+        if timing_changed:
+            print("\nRun 'python arnie.py install' to apply the new schedule.")
+
+
 # --- CLI ---
 
 def main():
@@ -257,6 +317,13 @@ def main():
     sub.add_parser("log", help="Print today's exercise log")
     sub.add_parser("reset", help="Reset progression to day 1")
 
+    config_p = sub.add_parser("config", help="View or update configuration")
+    config_p.add_argument("--start-hour", type=int, dest="start_hour", help="Hour to start notifications (0-23)")
+    config_p.add_argument("--end-hour", type=int, dest="end_hour", help="Hour to stop notifications (0-23)")
+    config_p.add_argument("--frequency", type=int, help="Minutes between notifications")
+    config_p.add_argument("--tier-days", dest="tier_days", help="Days per tier, comma-separated (e.g. 14,14)")
+    config_p.add_argument("--sound", help="macOS notification sound name")
+
     args = parser.parse_args()
 
     commands = {
@@ -266,6 +333,7 @@ def main():
         "status": cmd_status,
         "log": cmd_log,
         "reset": cmd_reset,
+        "config": cmd_config,
     }
 
     if args.command in commands:
