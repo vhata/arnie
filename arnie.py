@@ -3,28 +3,30 @@
 Arnie — Desk workout notifications from Arnold's Get Back In Shape guide.
 
 Usage:
+    python arnie.py install            Build Arnie.app and optionally install LaunchAgent
     python arnie.py notify [--force]   Fire one notification now
-    python arnie.py install            Install the LaunchAgent
-    python arnie.py uninstall          Remove the LaunchAgent
     python arnie.py status             Show current state and schedule
     python arnie.py log                Print today's exercise log
-    python arnie.py reset              Reset progression to day 1
     python arnie.py config [options]   View or update configuration
+    python arnie.py reset              Reset progression to day 1
+    python arnie.py uninstall          Remove the LaunchAgent
+    python arnie.py export-exercises   Export exercises.json from Python data
 """
 
 import argparse
 import json
 import os
 import plistlib
+import shutil
 import subprocess
 import sys
-import tempfile
 from datetime import date, datetime
 from pathlib import Path
 
-from config import load_config, save_config, validate_config
+from config import APP_SUPPORT_DIR, load_config, save_config, validate_config
 from exercises import (
     EXERCISES,
+    QUOTES,
     days_until_next_tier,
     get_current_tier,
     pick_exercise,
@@ -32,16 +34,22 @@ from exercises import (
 )
 
 PROJECT_DIR = Path(__file__).resolve().parent
-DATA_DIR = PROJECT_DIR / "data"
-LOGS_DIR = DATA_DIR / "logs"
-STATE_FILE = DATA_DIR / "state.json"
+LOGS_DIR = APP_SUPPORT_DIR / "logs"
+STATE_FILE = APP_SUPPORT_DIR / "state.json"
 VENV_DIR = PROJECT_DIR / ".venv"
 PLIST_NAME = "com.arnie.workout"
 PLIST_DEST = Path.home() / "Library" / "LaunchAgents" / f"{PLIST_NAME}.plist"
-NOTIFIER_SRC = PROJECT_DIR / "notifier" / "main.swift"
-NOTIFIER_PLIST = PROJECT_DIR / "notifier" / "Info.plist"
 NOTIFIER_APP = PROJECT_DIR / "Arnie.app"
 NOTIFIER_BIN = NOTIFIER_APP / "Contents" / "MacOS" / "Arnie"
+
+SWIFT_SOURCES = [
+    "notifier/main.swift",
+    "notifier/DataManager.swift",
+    "notifier/ExerciseEngine.swift",
+    "notifier/NotificationManager.swift",
+    "notifier/TimerController.swift",
+    "notifier/MenuBarController.swift",
+]
 
 
 # --- State management ---
@@ -61,8 +69,7 @@ def default_state() -> dict:
 
 
 def save_state(state: dict):
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    # Atomic write
+    APP_SUPPORT_DIR.mkdir(parents=True, exist_ok=True)
     tmp = STATE_FILE.with_suffix(".tmp")
     tmp.write_text(json.dumps(state, indent=2))
     tmp.replace(STATE_FILE)
@@ -77,7 +84,6 @@ def send_notification(title: str, message: str, sound: str):
             check=True,
         )
     else:
-        # Fallback to osascript if Arnie.app hasn't been built
         safe_title = title.replace('"', '\\"')
         safe_msg = message.replace('"', '\\"')
         safe_sound = sound.replace('"', '\\"')
@@ -105,11 +111,10 @@ def cmd_notify(args):
     config = load_config()
     now = datetime.now()
     if not args.force and not (config["start_hour"] <= now.hour < config["end_hour"]):
-        return  # Outside work hours, exit silently
+        return
 
     state = load_state()
 
-    # New day? Reset today's shown list
     today = date.today().isoformat()
     if state.get("last_date") != today:
         state["today_shown"] = []
@@ -133,20 +138,48 @@ def cmd_notify(args):
     print(f"  \"{quote}\"")
 
 
+def cmd_export_exercises(args):
+    """Export exercises.json from Python exercise data."""
+    out = PROJECT_DIR / "exercises.json"
+    data = {"exercises": EXERCISES, "quotes": QUOTES}
+    out.write_text(json.dumps(data, indent=2) + "\n")
+    print(f"Exported {len(EXERCISES)} exercises and {len(QUOTES)} quotes to {out}")
+
+
 def build_notifier():
-    """Compile the Swift notifier into Arnie.app."""
-    print("Building Arnie.app notifier...")
+    """Compile all Swift sources into Arnie.app."""
+    exercises_json = PROJECT_DIR / "exercises.json"
+    if not exercises_json.exists():
+        print("Generating exercises.json...")
+        cmd_export_exercises(None)
+
+    print("Building Arnie.app...")
     NOTIFIER_BIN.parent.mkdir(parents=True, exist_ok=True)
+
+    src_paths = [str(PROJECT_DIR / s) for s in SWIFT_SOURCES]
     subprocess.run(
         [
-            "swiftc", "-o", str(NOTIFIER_BIN), str(NOTIFIER_SRC),
-            "-framework", "Cocoa", "-framework", "UserNotifications",
+            "swiftc", "-o", str(NOTIFIER_BIN),
+            *src_paths,
+            "-framework", "Cocoa",
+            "-framework", "UserNotifications",
+            "-framework", "ServiceManagement",
+            "-target", "arm64-apple-macosx14.0",
         ],
         check=True,
     )
-    # Copy Info.plist into the bundle
-    import shutil
-    shutil.copy2(str(NOTIFIER_PLIST), str(NOTIFIER_APP / "Contents" / "Info.plist"))
+
+    # Copy Info.plist
+    shutil.copy2(
+        str(PROJECT_DIR / "notifier" / "Info.plist"),
+        str(NOTIFIER_APP / "Contents" / "Info.plist"),
+    )
+
+    # Copy exercises.json into bundle Resources
+    resources_dir = NOTIFIER_APP / "Contents" / "Resources"
+    resources_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(str(exercises_json), str(resources_dir / "exercises.json"))
+
     # Ad-hoc codesign
     subprocess.run(["codesign", "--force", "--sign", "-", str(NOTIFIER_APP)], check=True)
     print(f"  Built and signed {NOTIFIER_APP}")
@@ -155,19 +188,19 @@ def build_notifier():
 def cmd_install(args):
     config = load_config()
 
-    # Build the native notifier app
+    # Build the app
     build_notifier()
 
     # Create data directories
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    APP_SUPPORT_DIR.mkdir(parents=True, exist_ok=True)
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
 
     # Initialize state if needed
     if not STATE_FILE.exists():
         save_state(default_state())
-        print(f"Initialized state (tier 1, starting today)")
+        print("Initialized state (tier 1, starting today)")
 
-    # Create venv for a stable Python path
+    # Create venv for a stable Python path (for LaunchAgent)
     if not VENV_DIR.exists():
         print("Creating virtual environment...")
         subprocess.run(
@@ -175,12 +208,10 @@ def cmd_install(args):
             check=True,
         )
         print(f"  Created at {VENV_DIR}")
-    else:
-        print(f"Venv already exists at {VENV_DIR}")
 
     venv_python = VENV_DIR / "bin" / "python3"
 
-    # Generate plist intervals from config
+    # Generate LaunchAgent plist
     freq = config["frequency_minutes"]
     intervals = []
     for hour in range(config["start_hour"], config["end_hour"]):
@@ -197,25 +228,20 @@ def cmd_install(args):
             "notify",
         ],
         "StartCalendarInterval": intervals,
-        "StandardOutPath": str(DATA_DIR / "launchd.stdout.log"),
-        "StandardErrorPath": str(DATA_DIR / "launchd.stderr.log"),
+        "StandardOutPath": str(APP_SUPPORT_DIR / "launchd.stdout.log"),
+        "StandardErrorPath": str(APP_SUPPORT_DIR / "launchd.stderr.log"),
         "WorkingDirectory": str(PROJECT_DIR),
     }
 
-    # Write plist to LaunchAgents
     PLIST_DEST.parent.mkdir(parents=True, exist_ok=True)
     with open(PLIST_DEST, "wb") as f:
         plistlib.dump(plist, f)
-    print(f"Wrote plist to {PLIST_DEST}")
 
-    # Load the agent
     subprocess.run(["launchctl", "unload", str(PLIST_DEST)], capture_output=True)
     subprocess.run(["launchctl", "load", str(PLIST_DEST)], check=True)
-    last_hour = config["end_hour"] - 1
-    last_min = 60 - freq if freq <= 60 else 0
-    print(f"LaunchAgent loaded. Notifications every {freq} min, {config['start_hour']}:00-{last_hour}:{last_min:02d}.")
+    print(f"LaunchAgent loaded (every {freq} min, {config['start_hour']}:00-{config['end_hour'] - 1}:30)")
     print()
-    print("Test it now with: python arnie.py notify --force")
+    print("Or just launch Arnie.app directly — it has its own timer and menu bar icon.")
 
 
 def cmd_uninstall(args):
@@ -231,21 +257,16 @@ def cmd_uninstall(args):
 def cmd_status(args):
     config = load_config()
 
-    # LaunchAgent status
-    result = subprocess.run(
-        ["launchctl", "list"],
-        capture_output=True, text=True,
-    )
+    result = subprocess.run(["launchctl", "list"], capture_output=True, text=True)
     agent_loaded = PLIST_NAME in result.stdout
     print(f"LaunchAgent: {'loaded' if agent_loaded else 'not loaded'}")
 
-    # Config
     print(f"Schedule: every {config['frequency_minutes']} min, {config['start_hour']}:00-{config['end_hour'] - 1}:30")
     tier_days_str = " + ".join(f"{d}d" for d in config["tier_days"])
     print(f"Tier durations: {tier_days_str} (then all unlocked)")
     print(f"Sound: {config['sound']}")
+    print(f"Data: {APP_SUPPORT_DIR}")
 
-    # State
     state = load_state()
     tier = get_current_tier(state["tier_start_date"], config["tier_days"])
     remaining = days_until_next_tier(state["tier_start_date"], config["tier_days"])
@@ -264,7 +285,6 @@ def cmd_status(args):
     shown_today = len(state.get("today_shown", []))
     print(f"Exercises today: {shown_today} / {len(eligible)} available")
 
-    # Today's log
     log_file = LOGS_DIR / f"{date.today().isoformat()}.log"
     if log_file.exists():
         print(f"\nToday's log ({log_file.name}):")
@@ -343,11 +363,12 @@ def main():
     notify_p = sub.add_parser("notify", help="Fire one notification now")
     notify_p.add_argument("--force", action="store_true", help="Ignore work hours check")
 
-    sub.add_parser("install", help="Install the LaunchAgent")
+    sub.add_parser("install", help="Build Arnie.app and install LaunchAgent")
     sub.add_parser("uninstall", help="Remove the LaunchAgent")
     sub.add_parser("status", help="Show current state and schedule")
     sub.add_parser("log", help="Print today's exercise log")
     sub.add_parser("reset", help="Reset progression to day 1")
+    sub.add_parser("export-exercises", help="Export exercises.json from Python data")
 
     config_p = sub.add_parser("config", help="View or update configuration")
     config_p.add_argument("--start-hour", type=int, dest="start_hour", help="Hour to start notifications (0-23)")
@@ -366,6 +387,7 @@ def main():
         "log": cmd_log,
         "reset": cmd_reset,
         "config": cmd_config,
+        "export-exercises": cmd_export_exercises,
     }
 
     if args.command in commands:

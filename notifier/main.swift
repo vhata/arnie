@@ -1,62 +1,49 @@
 import Cocoa
 import UserNotifications
 
-// Arnie notification sender — compiled into Arnie.app by `arnie.py install`.
-// Usage: Arnie.app/Contents/MacOS/Arnie "Title" "Body text" "SoundName"
-
-class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
-    func userNotificationCenter(
-        _ center: UNUserNotificationCenter,
-        willPresent notification: UNNotification,
-        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
-    ) {
-        completionHandler([.banner, .sound, .list])
-    }
-}
+// Arnie — Desk workout menu bar app
+//
+// If launched with args: fire one notification and exit (backward compat with Python CLI).
+// If launched without args: start the menu bar app.
 
 let args = CommandLine.arguments
 
-// If launched with no arguments (e.g. by clicking a notification), just exit.
-guard args.count > 1 else { exit(0) }
+if args.count > 1 {
+    // Legacy one-shot mode: Arnie.app "Title" "Body" "Sound"
+    let app = NSApplication.shared
+    app.setActivationPolicy(.accessory)
 
-let title = args[1]
-let body = args.count > 2 ? args[2] : ""
-let soundName = args.count > 3 ? args[3] : "Ping"
+    let title = args[1]
+    let body = args.count > 2 ? args[2] : ""
+    let sound = args.count > 3 ? args[3] : "Ping"
 
-let app = NSApplication.shared
-app.setActivationPolicy(.accessory)
+    NotificationManager.shared.sendOneShotAndExit(title: title, body: body, sound: sound)
+} else {
+    // Full menu bar app mode
+    let app = NSApplication.shared
+    app.setActivationPolicy(.accessory)
 
-let delegate = NotificationDelegate()
-let center = UNUserNotificationCenter.current()
-center.delegate = delegate
-
-let semaphore = DispatchSemaphore(value: 0)
-
-center.requestAuthorization(options: [.alert, .sound]) { granted, error in
-    guard granted else {
-        fputs("Notifications not permitted. Allow Arnie in System Settings > Notifications.\n", stderr)
-        exit(1)
-    }
-
-    let content = UNMutableNotificationContent()
-    content.title = title
-    content.body = body
-    content.sound = UNNotificationSound(named: UNNotificationSoundName(soundName))
-
-    let request = UNNotificationRequest(
-        identifier: UUID().uuidString,
-        content: content,
-        trigger: nil
-    )
-
-    center.add(request) { error in
-        if let error = error {
-            fputs("Failed to send: \(error.localizedDescription)\n", stderr)
-        }
-        semaphore.signal()
-    }
+    let delegate = AppDelegate()
+    app.delegate = delegate
+    app.run()
 }
 
-semaphore.wait()
-Thread.sleep(forTimeInterval: 0.5)
-exit(0)
+// MARK: - AppDelegate
+
+class AppDelegate: NSObject, NSApplicationDelegate {
+    private let menuBar = MenuBarController()
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // Request notification permission
+        NotificationManager.shared.requestAuthorization()
+
+        // Set up menu bar
+        menuBar.setup()
+
+        // Start the exercise timer
+        TimerController.shared.onMenuUpdate = {
+            // Menu rebuilds dynamically via NSMenuDelegate, nothing to do here
+        }
+        TimerController.shared.start()
+    }
+}

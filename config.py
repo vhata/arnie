@@ -3,7 +3,8 @@
 import json
 from pathlib import Path
 
-CONFIG_FILE = Path(__file__).resolve().parent / "config.json"
+APP_SUPPORT_DIR = Path.home() / "Library" / "Application Support" / "Arnie"
+CONFIG_FILE = APP_SUPPORT_DIR / "config.json"
 
 DEFAULTS = {
     "start_hour": 10,
@@ -26,11 +27,15 @@ def load_config() -> dict:
 
 
 def save_config(config: dict):
-    """Write config to config.json (atomic write)."""
-    # Only save keys that are in DEFAULTS
-    to_save = {k: config[k] for k in DEFAULTS if k in config}
+    """Write config to config.json, preserving unknown keys (e.g. start_at_login from Swift)."""
+    APP_SUPPORT_DIR.mkdir(parents=True, exist_ok=True)
+    # Load existing to preserve keys Python doesn't know about
+    existing = {}
+    if CONFIG_FILE.exists():
+        existing = json.loads(CONFIG_FILE.read_text())
+    existing.update({k: config[k] for k in DEFAULTS if k in config})
     tmp = CONFIG_FILE.with_suffix(".tmp")
-    tmp.write_text(json.dumps(to_save, indent=2) + "\n")
+    tmp.write_text(json.dumps(existing, indent=2) + "\n")
     tmp.replace(CONFIG_FILE)
 
 

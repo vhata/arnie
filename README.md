@@ -1,6 +1,25 @@
 # Arnie
 
-Desk workout notifications powered by Arnold Schwarzenegger's *Get Back In Shape* guide. A macOS LaunchAgent nudges you every 30 minutes during work hours with a quick exercise you can do at your desk.
+Desk workout notifications powered by Arnold Schwarzenegger's *Get Back In Shape* guide. A native macOS menu bar app that nudges you with exercises throughout the workday.
+
+Built with Claude Code.
+
+## Features
+
+- **Menu bar app** with status, settings, and today's exercise log
+- **Interactive notifications** with Done, Skip, and Another buttons
+- **49 exercises** across 3 tiers that unlock over weeks
+- **Configurable** schedule, frequency, sounds, and progression
+- **Start at Login** support
+
+## Quick start
+
+```bash
+python arnie.py install
+open Arnie.app
+```
+
+Or just build and launch `Arnie.app` — it's self-contained and handles its own scheduling.
 
 ## How it works
 
@@ -12,30 +31,37 @@ Exercises are organized into three tiers that unlock over time:
 
 Within a day, exercises don't repeat until the full eligible pool has been shown. Each notification includes a motivational quote.
 
-## Setup
+## The menu bar app
 
-```bash
-python arnie.py install
+Click the walking figure icon in your menu bar to see:
+
+- Last exercise shown
+- "Next Exercise" button (or press ⌘N)
+- Current day, tier, and exercise count
+- Today's exercise log
+- Settings (hours, frequency, sound, Start at Login)
+- Reset progression
+
+Notifications have action buttons: **Done** (default), **Skip** (lets the exercise come back later), and **Another** (fires a new one immediately).
+
+## Python CLI
+
+The CLI reads and writes the same data as the app.
+
 ```
-
-This creates a virtual environment, initializes state, and installs a macOS LaunchAgent that fires every 30 minutes from 10:00 to 18:30.
-
-## Commands
-
-```
-python arnie.py notify [--force]   # Fire one notification now (--force ignores work hours)
-python arnie.py install            # Install the LaunchAgent
-python arnie.py uninstall          # Remove the LaunchAgent (keeps state and logs)
-python arnie.py status             # Show current tier, day count, and today's exercises
+python arnie.py install            # Build Arnie.app and install LaunchAgent
+python arnie.py notify [--force]   # Fire one notification now
+python arnie.py status             # Show current state and schedule
 python arnie.py log                # Print today's exercise log
+python arnie.py config [options]   # View or update configuration
 python arnie.py reset              # Reset progression back to tier 1, day 1
-python arnie.py config             # View current configuration
-python arnie.py config [options]   # Update configuration
+python arnie.py export-exercises   # Regenerate exercises.json from Python data
+python arnie.py uninstall          # Remove the LaunchAgent
 ```
 
 ## Configuration
 
-Edit `config.json` directly, or use the CLI:
+Change settings via the menu bar app's Settings submenu, or via CLI:
 
 ```bash
 python arnie.py config --start-hour 9 --end-hour 18
@@ -43,8 +69,6 @@ python arnie.py config --frequency 45
 python arnie.py config --tier-days 7,7
 python arnie.py config --sound Glass
 ```
-
-After changing timing settings, run `python arnie.py install` to apply the new schedule.
 
 | Setting | Default | Description |
 |---------|---------|-------------|
@@ -54,21 +78,50 @@ After changing timing settings, run `python arnie.py install` to apply the new s
 | `tier_days` | [14, 14] | Days at each tier before unlocking the next |
 | `sound` | Ping | macOS notification sound name |
 
-## Requirements
+## Data storage
 
-- macOS
-- Python 3 (Homebrew or system)
+App data lives in `~/Library/Application Support/Arnie/`:
 
-No third-party packages — stdlib only.
+```
+config.json     # User settings
+state.json      # Tier progression and today's shown exercises
+logs/           # Daily exercise logs
+```
+
+## Building from source
+
+Requires macOS 14+ and Xcode Command Line Tools.
+
+```bash
+python arnie.py install    # Builds Arnie.app, installs LaunchAgent
+```
+
+Or manually:
+
+```bash
+python arnie.py export-exercises
+swiftc -o Arnie.app/Contents/MacOS/Arnie notifier/*.swift \
+  -framework Cocoa -framework UserNotifications -framework ServiceManagement \
+  -target arm64-apple-macosx14.0
+cp notifier/Info.plist Arnie.app/Contents/Info.plist
+mkdir -p Arnie.app/Contents/Resources
+cp exercises.json Arnie.app/Contents/Resources/exercises.json
+codesign --force --sign - Arnie.app
+```
 
 ## Files
 
 ```
-arnie.py        # CLI and notification logic
-exercises.py    # Exercise data, selection, and progression
-config.py       # Configuration loading, saving, and validation
-config.json     # User-editable settings
-data/
-  state.json    # Tracks current tier and today's shown exercises (auto-created)
-  logs/         # Daily exercise logs (auto-created)
+notifier/
+  main.swift                # App entry point, backward compat with CLI
+  MenuBarController.swift   # Menu bar icon and dropdown
+  NotificationManager.swift # Notifications with action buttons
+  ExerciseEngine.swift      # Exercise loading, tier logic, selection
+  DataManager.swift         # Config, state, and log I/O
+  TimerController.swift     # Exercise scheduling
+  Info.plist                # App bundle metadata
+exercises.json              # Shared exercise data (generated from Python)
+exercises.py                # Python exercise loader and logic
+arnie.py                    # Python CLI
+config.py                   # Python config management
 ```
