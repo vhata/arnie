@@ -15,7 +15,11 @@ class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
 }
 
 let args = CommandLine.arguments
-let title = args.count > 1 ? args[1] : "Arnie"
+
+// If launched with no arguments (e.g. by clicking a notification), just exit.
+guard args.count > 1 else { exit(0) }
+
+let title = args[1]
 let body = args.count > 2 ? args[2] : ""
 let soundName = args.count > 3 ? args[3] : "Ping"
 
