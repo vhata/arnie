@@ -7,16 +7,20 @@ class MenuBarController: NSObject, NSMenuDelegate {
 
     func setup() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        if let button = statusItem.button {
-            if let img = NSImage(systemSymbolName: "figure.walk", accessibilityDescription: "Arnie") {
-                img.isTemplate = true
-                button.image = img
-            } else {
-                button.title = "💪"
-            }
-        }
+        updateIcon()
         menu.delegate = self
         statusItem.menu = menu
+    }
+
+    func updateIcon() {
+        guard let button = statusItem.button else { return }
+        let config = DataManager.shared.loadConfig()
+        if let img = NSImage(systemSymbolName: config.icon, accessibilityDescription: "Arnie") {
+            img.isTemplate = true
+            button.image = img
+        } else {
+            button.title = "💪"
+        }
     }
 
     // MARK: - NSMenuDelegate
@@ -38,9 +42,12 @@ class MenuBarController: NSObject, NSMenuDelegate {
             )
             menu.addItem(nameItem)
 
-            let instrItem = NSMenuItem(title: instr, action: nil, keyEquivalent: "")
-            instrItem.isEnabled = false
-            menu.addItem(instrItem)
+            // Word-wrap the instruction into multiple menu items
+            for line in wordWrap(instr, maxWidth: 45) {
+                let lineItem = NSMenuItem(title: line, action: nil, keyEquivalent: "")
+                lineItem.isEnabled = false
+                menu.addItem(lineItem)
+            }
             menu.addItem(.separator())
         }
 
@@ -110,6 +117,7 @@ class MenuBarController: NSObject, NSMenuDelegate {
                          choices: ["Ping", "Glass", "Basso", "Hero", "Morse", "Pop", "Purr", "Submarine", "Tink"],
                          current: config.sound,
                          action: #selector(setSound(_:)))
+        addIconSubmenu(to: settingsSubmenu, current: config.icon)
         settingsSubmenu.addItem(.separator())
 
         let loginItem = NSMenuItem(title: "Start at Login", action: #selector(toggleLoginItem), keyEquivalent: "")
@@ -171,6 +179,35 @@ class MenuBarController: NSObject, NSMenuDelegate {
         parentMenu.addItem(item)
     }
 
+    // Choice Submenus (Icon — with SF Symbol previews)
+    private func addIconSubmenu(to parentMenu: NSMenu, current: String) {
+        let icons: [(name: String, symbol: String)] = [
+            ("Dumbbell", "dumbbell.fill"),
+            ("Walking", "figure.walk"),
+            ("Running", "figure.run"),
+            ("Flexibility", "figure.flexibility"),
+            ("Strengthtraining", "figure.strengthtraining.traditional"),
+            ("Heart", "heart.fill"),
+            ("Flame", "flame.fill"),
+            ("Star", "star.fill"),
+        ]
+        let sub = NSMenu()
+        for icon in icons {
+            let item = NSMenuItem(title: icon.name, action: #selector(setIcon(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = icon.symbol
+            if icon.symbol == current { item.state = .on }
+            if let img = NSImage(systemSymbolName: icon.symbol, accessibilityDescription: icon.name) {
+                img.isTemplate = true
+                item.image = img
+            }
+            sub.addItem(item)
+        }
+        let item = NSMenuItem(title: "Icon", action: nil, keyEquivalent: "")
+        item.submenu = sub
+        parentMenu.addItem(item)
+    }
+
     // MARK: - Actions
 
     @objc private func nextExercise() {
@@ -203,6 +240,15 @@ class MenuBarController: NSObject, NSMenuDelegate {
         var config = DataManager.shared.loadConfig()
         config.sound = sound
         DataManager.shared.saveConfig(config)
+        NSSound(named: NSSound.Name(sound))?.play()
+    }
+
+    @objc private func setIcon(_ sender: NSMenuItem) {
+        guard let icon = sender.representedObject as? String else { return }
+        var config = DataManager.shared.loadConfig()
+        config.icon = icon
+        DataManager.shared.saveConfig(config)
+        updateIcon()
     }
 
     @objc private func toggleLoginItem() {
@@ -239,5 +285,24 @@ class MenuBarController: NSObject, NSMenuDelegate {
 
     @objc private func quit() {
         NSApp.terminate(nil)
+    }
+
+    // MARK: - Helpers
+
+    private func wordWrap(_ text: String, maxWidth: Int) -> [String] {
+        var lines: [String] = []
+        var current = ""
+        for word in text.split(separator: " ") {
+            if current.isEmpty {
+                current = String(word)
+            } else if current.count + 1 + word.count <= maxWidth {
+                current += " " + word
+            } else {
+                lines.append(current)
+                current = String(word)
+            }
+        }
+        if !current.isEmpty { lines.append(current) }
+        return lines
     }
 }

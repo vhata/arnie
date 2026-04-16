@@ -9,6 +9,7 @@ struct ArnieConfig: Codable {
     var tierDays: [Int]
     var sound: String
     var startAtLogin: Bool
+    var icon: String
 
     enum CodingKeys: String, CodingKey {
         case startHour = "start_hour"
@@ -17,6 +18,7 @@ struct ArnieConfig: Codable {
         case tierDays = "tier_days"
         case sound
         case startAtLogin = "start_at_login"
+        case icon
     }
 
     static let defaults = ArnieConfig(
@@ -25,17 +27,20 @@ struct ArnieConfig: Codable {
         frequencyMinutes: 30,
         tierDays: [14, 14],
         sound: "Ping",
-        startAtLogin: false
+        startAtLogin: false,
+        icon: "dumbbell.fill"
     )
 
     init(startHour: Int = 10, endHour: Int = 19, frequencyMinutes: Int = 30,
-         tierDays: [Int] = [14, 14], sound: String = "Ping", startAtLogin: Bool = false) {
+         tierDays: [Int] = [14, 14], sound: String = "Ping", startAtLogin: Bool = false,
+         icon: String = "dumbbell.fill") {
         self.startHour = startHour
         self.endHour = endHour
         self.frequencyMinutes = frequencyMinutes
         self.tierDays = tierDays
         self.sound = sound
         self.startAtLogin = startAtLogin
+        self.icon = icon
     }
 
     init(from decoder: Decoder) throws {
@@ -47,6 +52,7 @@ struct ArnieConfig: Codable {
         tierDays = (try? c.decode([Int].self, forKey: .tierDays)) ?? d.tierDays
         sound = (try? c.decode(String.self, forKey: .sound)) ?? d.sound
         startAtLogin = (try? c.decode(Bool.self, forKey: .startAtLogin)) ?? d.startAtLogin
+        icon = (try? c.decode(String.self, forKey: .icon)) ?? d.icon
     }
 }
 
