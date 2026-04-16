@@ -38,6 +38,10 @@ STATE_FILE = DATA_DIR / "state.json"
 VENV_DIR = PROJECT_DIR / ".venv"
 PLIST_NAME = "com.arnie.workout"
 PLIST_DEST = Path.home() / "Library" / "LaunchAgents" / f"{PLIST_NAME}.plist"
+NOTIFIER_SRC = PROJECT_DIR / "notifier" / "main.swift"
+NOTIFIER_PLIST = PROJECT_DIR / "notifier" / "Info.plist"
+NOTIFIER_APP = PROJECT_DIR / "Arnie.app"
+NOTIFIER_BIN = NOTIFIER_APP / "Contents" / "MacOS" / "Arnie"
 
 
 # --- State management ---
@@ -67,17 +71,23 @@ def save_state(state: dict):
 # --- Notification ---
 
 def send_notification(title: str, message: str, sound: str):
-    # osascript notification strings need quotes escaped
-    safe_title = title.replace('"', '\\"')
-    safe_msg = message.replace('"', '\\"')
-    safe_sound = sound.replace('"', '\\"')
-    subprocess.run(
-        [
-            "osascript", "-e",
-            f'display notification "{safe_msg}" with title "{safe_title}" sound name "{safe_sound}"',
-        ],
-        check=True,
-    )
+    if NOTIFIER_BIN.exists():
+        subprocess.run(
+            ["open", str(NOTIFIER_APP), "--args", title, message, sound],
+            check=True,
+        )
+    else:
+        # Fallback to osascript if Arnie.app hasn't been built
+        safe_title = title.replace('"', '\\"')
+        safe_msg = message.replace('"', '\\"')
+        safe_sound = sound.replace('"', '\\"')
+        subprocess.run(
+            [
+                "osascript", "-e",
+                f'display notification "{safe_msg}" with title "{safe_title}" sound name "{safe_sound}"',
+            ],
+            check=True,
+        )
 
 
 def append_log(exercise: dict, quote: str):
@@ -123,8 +133,30 @@ def cmd_notify(args):
     print(f"  \"{quote}\"")
 
 
+def build_notifier():
+    """Compile the Swift notifier into Arnie.app."""
+    print("Building Arnie.app notifier...")
+    NOTIFIER_BIN.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        [
+            "swiftc", "-o", str(NOTIFIER_BIN), str(NOTIFIER_SRC),
+            "-framework", "Cocoa", "-framework", "UserNotifications",
+        ],
+        check=True,
+    )
+    # Copy Info.plist into the bundle
+    import shutil
+    shutil.copy2(str(NOTIFIER_PLIST), str(NOTIFIER_APP / "Contents" / "Info.plist"))
+    # Ad-hoc codesign
+    subprocess.run(["codesign", "--force", "--sign", "-", str(NOTIFIER_APP)], check=True)
+    print(f"  Built and signed {NOTIFIER_APP}")
+
+
 def cmd_install(args):
     config = load_config()
+
+    # Build the native notifier app
+    build_notifier()
 
     # Create data directories
     DATA_DIR.mkdir(parents=True, exist_ok=True)
