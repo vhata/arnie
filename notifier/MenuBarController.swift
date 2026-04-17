@@ -15,12 +15,25 @@ class MenuBarController: NSObject, NSMenuDelegate {
     func updateIcon() {
         guard let button = statusItem.button else { return }
         let config = DataManager.shared.loadConfig()
+        let count = todayCount()
+
         if let img = NSImage(systemSymbolName: config.icon, accessibilityDescription: "Arnie") {
             img.isTemplate = true
             button.image = img
+            button.imagePosition = .imageLeft
+            button.title = count > 0 ? " \(count)" : ""
         } else {
-            button.title = "💪"
+            button.image = nil
+            button.title = count > 0 ? "💪 \(count)" : "💪"
         }
+    }
+
+    private func todayCount() -> Int {
+        let state = DataManager.shared.loadState()
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd"
+        let today = fmt.string(from: Date())
+        return state.lastDate == today ? state.todayShown.count : 0
     }
 
     // MARK: - NSMenuDelegate
@@ -280,6 +293,7 @@ class MenuBarController: NSObject, NSMenuDelegate {
             state.todayShown = []
             state.lastDate = nil
             DataManager.shared.saveState(state)
+            updateIcon()
         }
     }
 

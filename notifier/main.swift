@@ -41,8 +41,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menuBar.setup()
 
         // Start the exercise timer
-        TimerController.shared.onMenuUpdate = {
-            // Menu rebuilds dynamically via NSMenuDelegate, nothing to do here
+        TimerController.shared.onMenuUpdate = { [weak menuBar] in
+            // Menu rebuilds dynamically via NSMenuDelegate, but the icon
+            // badge needs an explicit refresh after each fire.
+            DispatchQueue.main.async { menuBar?.updateIcon() }
         }
         TimerController.shared.start()
     }
