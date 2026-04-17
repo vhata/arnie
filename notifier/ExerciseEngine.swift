@@ -24,17 +24,20 @@ class ExerciseEngine {
     let quotes: [String]
 
     private init() {
-        // Load from bundle Resources
-        guard let url = Bundle.main.url(forResource: "exercises", withExtension: "json"),
-              let data = try? Data(contentsOf: url),
-              let loaded = try? JSONDecoder().decode(ExerciseData.self, from: data) else {
-            fputs("Fatal: could not load exercises.json from app bundle\n", stderr)
-            exercises = []
-            quotes = ["You can do this!"]
-            return
+        guard let url = Bundle.main.url(forResource: "exercises", withExtension: "json") else {
+            fatalError("exercises.json missing from app bundle — rebuild Arnie.app")
         }
-        exercises = loaded.exercises
-        quotes = loaded.quotes
+        do {
+            let data = try Data(contentsOf: url)
+            let loaded = try JSONDecoder().decode(ExerciseData.self, from: data)
+            guard !loaded.exercises.isEmpty, !loaded.quotes.isEmpty else {
+                fatalError("exercises.json loaded but contains no exercises or quotes")
+            }
+            exercises = loaded.exercises
+            quotes = loaded.quotes
+        } catch {
+            fatalError("Failed to load exercises.json: \(error.localizedDescription)")
+        }
     }
 
     // MARK: Tier Logic
@@ -89,7 +92,7 @@ class ExerciseEngine {
             pool = eligible
         }
 
-        return pool.randomElement() ?? exercises[0]
+        return pool.randomElement()!
     }
 
     func eligibleCount(tierStartDate: String, tierDays: [Int]) -> Int {
