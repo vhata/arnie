@@ -68,8 +68,24 @@ class TimerController {
     private func scheduleTimer(intervalMinutes: Int) {
         timer?.invalidate()
         let interval = TimeInterval(intervalMinutes * 60)
-        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+
+        // Calculate seconds until the next aligned clock boundary
+        let now = Date()
+        let cal = Calendar.current
+        let minute = cal.component(.minute, from: now)
+        let second = cal.component(.second, from: now)
+
+        let minutesSinceLastBoundary = minute % intervalMinutes
+        let minutesUntilNext = intervalMinutes - minutesSinceLastBoundary
+        let secondsUntilNext = TimeInterval(minutesUntilNext * 60 - second)
+
+        // Fire once at the next boundary, then repeat on the interval
+        timer = Timer.scheduledTimer(withTimeInterval: secondsUntilNext, repeats: false) { [weak self] _ in
             self?.timerFired()
+            // Now start the repeating timer, aligned
+            self?.timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+                self?.timerFired()
+            }
         }
     }
 
