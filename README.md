@@ -109,6 +109,38 @@ cp exercises.json Arnie.app/Contents/Resources/exercises.json
 codesign --force --sign - Arnie.app
 ```
 
+## TODO
+
+### Sort the IP story before distributing
+
+Exercise names and instructions in `exercises.json` are derived from Arnold Schwarzenegger's *Get Back In Shape* guide (distributed via the Pump Club newsletter). Workout names like "The 20-Second Burn" and "The Pain Reliever" come straight from the guide's table of contents, and instructions are paraphrased from the workout descriptions.
+
+For personal use this is fine. Before shipping this to anyone else, pick one:
+
+- Rewrite every `name` and `instruction` in original language, and drop the `source` field.
+- Reach out to Arnold's Pump Club team for permission or a licensing arrangement.
+
+### Proper progression
+
+The current tier system gates exercises behind wall-clock days (14 days at Tier 1, 14 at Tier 2, then all unlocked). With the default schedule that means each Tier 1 exercise repeats ~20+ times before anything new appears — which makes the app boring fast, working against its own goal of nudging you to move.
+
+Better model to design:
+
+- Progression should respond to *use*, not the calendar. Unlock new exercises after N completed reps, not N days.
+- Track per-exercise completion counts in state, separate from `today_shown`.
+- Give the user a sense of "moving forward" on every `Done` tap.
+- Consider dropping tiers entirely and replacing them with tags (`easy`/`medium`/`hard`, or `chair`/`standing`/`floor`) that the user can filter on.
+
+#### Sub-note: gamification
+
+If we keep something progression-shaped, gamification can help it stick:
+
+- **Streaks** — consecutive days with at least one `Done`. Show it in the menu.
+- **Daily goal** — a small target (e.g. 5 exercises/day). Progress bar in the menu.
+- **Unlock events** — when a new exercise becomes available, fire a distinct "New exercise unlocked!" notification so it feels like a reward, not just a larger pool.
+- **Weekly summary** — a Sunday notification with the week's count, best day, new unlocks.
+- **Careful with guilt mechanics** — skips shouldn't punish. The app should feel like a cheerful nudge, not Duolingo's owl. Losing a streak over one bad day is the kind of thing that makes people uninstall.
+
 ## Files
 
 ```
