@@ -78,6 +78,7 @@ python arnie.py config --sound Glass
 | `frequency_minutes` | 30 | Minutes between notifications |
 | `tier_days` | [14, 14] | Days at each tier before unlocking the next |
 | `sound` | Ping | macOS notification sound name |
+| `weekdays_only` | `true` | Only fire Mon-Fri |
 
 ## Data storage
 

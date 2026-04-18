@@ -12,6 +12,7 @@ DEFAULTS = {
     "frequency_minutes": 30,
     "tier_days": [14, 14],
     "sound": "Ping",
+    "weekdays_only": True,
 }
 
 
@@ -47,6 +48,7 @@ def validate_config(config: dict) -> list[str]:
     freq = config.get("frequency_minutes")
     td = config.get("tier_days")
     sound = config.get("sound")
+    wo = config.get("weekdays_only")
 
     if not isinstance(sh, int) or not 0 <= sh <= 23:
         errors.append(f"start_hour must be 0-23, got {sh!r}")
@@ -60,5 +62,7 @@ def validate_config(config: dict) -> list[str]:
         errors.append(f"tier_days must be a non-empty list of positive integers, got {td!r}")
     if not isinstance(sound, str) or not sound:
         errors.append(f"sound must be a non-empty string, got {sound!r}")
+    if not isinstance(wo, bool):
+        errors.append(f"weekdays_only must be true or false, got {wo!r}")
 
     return errors

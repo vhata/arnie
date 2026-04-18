@@ -111,8 +111,11 @@ def append_log(exercise: dict, quote: str):
 def cmd_notify(args):
     config = load_config()
     now = datetime.now()
-    if not args.force and not (config["start_hour"] <= now.hour < config["end_hour"]):
-        return
+    if not args.force:
+        if not (config["start_hour"] <= now.hour < config["end_hour"]):
+            return
+        if config["weekdays_only"] and now.weekday() >= 5:
+            return
 
     state = load_state()
 
@@ -334,6 +337,9 @@ def cmd_config(args):
     if args.sound is not None:
         config["sound"] = args.sound
         changed = True
+    if args.weekdays_only is not None:
+        config["weekdays_only"] = args.weekdays_only
+        changed = True
 
     if changed:
         errors = validate_config(config)
@@ -351,6 +357,7 @@ def cmd_config(args):
     print(f"  frequency_minutes: {config['frequency_minutes']}")
     print(f"  tier_days:        {config['tier_days']}")
     print(f"  sound:            {config['sound']}")
+    print(f"  weekdays_only:    {config['weekdays_only']}")
 
     if changed:
         timing_changed = any(x is not None for x in [args.start_hour, args.end_hour, args.frequency])
@@ -384,6 +391,7 @@ def main():
     config_p.add_argument("--frequency", type=int, help="Minutes between notifications")
     config_p.add_argument("--tier-days", dest="tier_days", help="Days per tier, comma-separated (e.g. 14,14)")
     config_p.add_argument("--sound", help="macOS notification sound name")
+    config_p.add_argument("--weekdays-only", dest="weekdays_only", action=argparse.BooleanOptionalAction, help="Only fire on Mon-Fri")
 
     args = parser.parse_args()
 

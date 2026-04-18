@@ -136,10 +136,17 @@ class TimerController {
 
     private func timerFired() {
         let config = DataManager.shared.loadConfig()
-        let hour = Calendar.current.component(.hour, from: Date())
+        let now = Date()
+        let hour = Calendar.current.component(.hour, from: now)
 
         guard hour >= config.startHour && hour < config.endHour else {
             return  // Outside work hours
+        }
+
+        if config.weekdaysOnly {
+            // Calendar weekday: 1 = Sunday, 7 = Saturday
+            let weekday = Calendar.current.component(.weekday, from: now)
+            guard weekday >= 2 && weekday <= 6 else { return }
         }
 
         fireNow()
