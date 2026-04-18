@@ -1,4 +1,5 @@
 import Foundation
+import UserNotifications
 
 class TimerController {
     static let shared = TimerController()
@@ -44,6 +45,14 @@ class TimerController {
     }
 
     func fireNow() {
+        // Before firing, sweep away any un-acted-on prior notifications and
+        // revert their rotation entries. Then fire fresh.
+        supersedePriorNotifications { [weak self] in
+            self?.actuallyFire()
+        }
+    }
+
+    private func actuallyFire() {
         let config = DataManager.shared.loadConfig()
         let engine = ExerciseEngine.shared
         var state = DataManager.shared.loadState()
@@ -73,6 +82,30 @@ class TimerController {
 
         lastExercise = exercise
         onMenuUpdate?()
+    }
+
+    private func supersedePriorNotifications(then: @escaping () -> Void) {
+        let center = UNUserNotificationCenter.current()
+        center.getDeliveredNotifications { delivered in
+            let ours = delivered.filter { $0.request.content.categoryIdentifier == "EXERCISE" }
+            let notificationIDs = ours.map { $0.request.identifier }
+            let exerciseIDs = ours.compactMap {
+                $0.request.content.userInfo["exerciseID"] as? String
+            }
+
+            if !notificationIDs.isEmpty {
+                center.removeDeliveredNotifications(withIdentifiers: notificationIDs)
+            }
+
+            DispatchQueue.main.async {
+                if !exerciseIDs.isEmpty {
+                    var state = DataManager.shared.loadState()
+                    state.todayShown.removeAll { exerciseIDs.contains($0) }
+                    DataManager.shared.saveState(state)
+                }
+                then()
+            }
+        }
     }
 
     // MARK: - Private
