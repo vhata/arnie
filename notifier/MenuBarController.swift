@@ -135,6 +135,11 @@ class MenuBarController: NSObject, NSMenuDelegate {
         addIconSubmenu(to: settingsSubmenu, current: config.icon)
         settingsSubmenu.addItem(.separator())
 
+        let weekdaysItem = NSMenuItem(title: "Weekdays Only", action: #selector(toggleWeekdaysOnly), keyEquivalent: "")
+        weekdaysItem.target = self
+        if config.weekdaysOnly { weekdaysItem.state = .on }
+        settingsSubmenu.addItem(weekdaysItem)
+
         let loginItem = NSMenuItem(title: "Start at Login", action: #selector(toggleLoginItem), keyEquivalent: "")
         loginItem.target = self
         if SMAppService.mainApp.status == .enabled {
@@ -264,6 +269,12 @@ class MenuBarController: NSObject, NSMenuDelegate {
         config.icon = icon
         DataManager.shared.saveConfig(config)
         updateIcon()
+    }
+
+    @objc private func toggleWeekdaysOnly() {
+        var config = DataManager.shared.loadConfig()
+        config.weekdaysOnly.toggle()
+        DataManager.shared.saveConfig(config)
     }
 
     @objc private func toggleLoginItem() {
