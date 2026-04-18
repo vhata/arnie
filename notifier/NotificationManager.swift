@@ -9,8 +9,9 @@ class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     private let center = UNUserNotificationCenter.current()
     private let categoryID = "EXERCISE"
 
-    var onSkip: ((String) -> Void)?   // Called with exercise ID
-    var onAnother: (() -> Void)?      // Called to trigger next exercise
+    var onDone: ((String) -> Void)?     // Called with exercise ID when user confirms
+    var onSkip: ((String) -> Void)?     // Called with exercise ID
+    var onAnother: ((String) -> Void)?  // Called with current exercise ID
 
     override init() {
         super.init()
@@ -107,11 +108,11 @@ class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         case "SKIP":
             onSkip?(exerciseID)
         case "ANOTHER":
-            onAnother?()
+            onAnother?(exerciseID)
         case "DONE", UNNotificationDefaultActionIdentifier:
-            break  // Already tracked in today_shown
+            onDone?(exerciseID)
         default:
-            break
+            break  // Explicit dismissal — no count, no log, leaves rotation slot filled
         }
 
         completionHandler()

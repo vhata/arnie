@@ -15,13 +15,25 @@ class TimerController {
         scheduleTimer(intervalMinutes: config.frequencyMinutes)
 
         // Wire up notification actions
+        NotificationManager.shared.onDone = { [weak self] exerciseID in
+            var state = DataManager.shared.loadState()
+            state.todayCompleted += 1
+            DataManager.shared.saveState(state)
+            if let ex = ExerciseEngine.shared.exercises.first(where: { $0.id == exerciseID }) {
+                DataManager.shared.appendLog(exercise: ex, quote: "")
+            }
+            DispatchQueue.main.async { self?.onMenuUpdate?() }
+        }
         NotificationManager.shared.onSkip = { [weak self] exerciseID in
             var state = DataManager.shared.loadState()
             state.todayShown.removeAll { $0 == exerciseID }
             DataManager.shared.saveState(state)
             self?.onMenuUpdate?()
         }
-        NotificationManager.shared.onAnother = { [weak self] in
+        NotificationManager.shared.onAnother = { [weak self] exerciseID in
+            var state = DataManager.shared.loadState()
+            state.todayShown.removeAll { $0 == exerciseID }
+            DataManager.shared.saveState(state)
             self?.fireNow()
         }
     }
@@ -36,12 +48,13 @@ class TimerController {
         let engine = ExerciseEngine.shared
         var state = DataManager.shared.loadState()
 
-        // Reset today_shown if new day
+        // Reset daily counters on day rollover
         let fmt = DateFormatter()
         fmt.dateFormat = "yyyy-MM-dd"
         let today = fmt.string(from: Date())
         if state.lastDate != today {
             state.todayShown = []
+            state.todayCompleted = 0
             state.lastDate = today
         }
 
@@ -54,7 +67,6 @@ class TimerController {
         NotificationManager.shared.sendNotification(
             title: title, body: body, sound: config.sound, exerciseID: exercise.id
         )
-        DataManager.shared.appendLog(exercise: exercise, quote: quote)
 
         state.todayShown.append(exercise.id)
         DataManager.shared.saveState(state)

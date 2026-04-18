@@ -33,7 +33,7 @@ class MenuBarController: NSObject, NSMenuDelegate {
         let fmt = DateFormatter()
         fmt.dateFormat = "yyyy-MM-dd"
         let today = fmt.string(from: Date())
-        return state.lastDate == today ? state.todayShown.count : 0
+        return state.lastDate == today ? state.todayCompleted : 0
     }
 
     // MARK: - NSMenuDelegate
@@ -76,9 +76,11 @@ class MenuBarController: NSObject, NSMenuDelegate {
         let numTiers = engine.numTiers(tierDays: config.tierDays)
         let day = engine.daysActive(tierStartDate: state.tierStartDate) + 1
         let eligible = engine.eligibleCount(tierStartDate: state.tierStartDate, tierDays: config.tierDays)
-        let shown = state.todayShown.count
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd"
+        let completed = state.lastDate == fmt.string(from: Date()) ? state.todayCompleted : 0
 
-        let statusText = "Day \(day) · Tier \(tier)/\(numTiers) · \(shown)/\(eligible) exercises"
+        let statusText = "Day \(day) · Tier \(tier)/\(numTiers) · \(completed)/\(eligible) done"
         let statusItem = NSMenuItem(title: statusText, action: nil, keyEquivalent: "")
         statusItem.isEnabled = false
         menu.addItem(statusItem)
@@ -291,6 +293,7 @@ class MenuBarController: NSObject, NSMenuDelegate {
             fmt.dateFormat = "yyyy-MM-dd"
             state.tierStartDate = fmt.string(from: Date())
             state.todayShown = []
+            state.todayCompleted = 0
             state.lastDate = nil
             DataManager.shared.saveState(state)
             updateIcon()

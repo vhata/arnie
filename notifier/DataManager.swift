@@ -60,11 +60,28 @@ struct ArnieState: Codable {
     var tierStartDate: String
     var lastDate: String?
     var todayShown: [String]
+    var todayCompleted: Int
 
     enum CodingKeys: String, CodingKey {
         case tierStartDate = "tier_start_date"
         case lastDate = "last_date"
         case todayShown = "today_shown"
+        case todayCompleted = "today_completed"
+    }
+
+    init(tierStartDate: String, lastDate: String?, todayShown: [String], todayCompleted: Int = 0) {
+        self.tierStartDate = tierStartDate
+        self.lastDate = lastDate
+        self.todayShown = todayShown
+        self.todayCompleted = todayCompleted
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        tierStartDate = try c.decode(String.self, forKey: .tierStartDate)
+        lastDate = try c.decodeIfPresent(String.self, forKey: .lastDate)
+        todayShown = try c.decodeIfPresent([String].self, forKey: .todayShown) ?? []
+        todayCompleted = try c.decodeIfPresent(Int.self, forKey: .todayCompleted) ?? 0
     }
 
     static func makeDefault() -> ArnieState {
@@ -73,7 +90,8 @@ struct ArnieState: Codable {
         return ArnieState(
             tierStartDate: fmt.string(from: Date()),
             lastDate: nil,
-            todayShown: []
+            todayShown: [],
+            todayCompleted: 0
         )
     }
 }
