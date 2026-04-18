@@ -19,7 +19,7 @@ python arnie.py install
 open Arnie.app
 ```
 
-Or just build and launch `Arnie.app` — it's self-contained and handles its own scheduling.
+`install` builds `Arnie.app` but does **not** install a LaunchAgent. The app runs its own menu bar timer and can start at login. If you'd rather have launchd fire notifications via the Python CLI instead, run `python arnie.py install-agent` — but don't run both, or you'll get duplicate notifications.
 
 ## How it works
 
@@ -49,7 +49,8 @@ Notifications have action buttons: **Done** (default), **Skip** (lets the exerci
 The CLI reads and writes the same data as the app.
 
 ```
-python arnie.py install            # Build Arnie.app and install LaunchAgent
+python arnie.py install            # Build Arnie.app (no LaunchAgent)
+python arnie.py install-agent      # Install the LaunchAgent scheduler (optional)
 python arnie.py notify [--force]   # Fire one notification now
 python arnie.py status             # Show current state and schedule
 python arnie.py log                # Print today's exercise log
@@ -93,7 +94,7 @@ logs/           # Daily exercise logs
 Requires macOS 14+ and Xcode Command Line Tools.
 
 ```bash
-python arnie.py install    # Builds Arnie.app, installs LaunchAgent
+python arnie.py install    # Builds Arnie.app
 ```
 
 Or manually:
