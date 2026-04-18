@@ -3,7 +3,8 @@
 Arnie — Desk workout notifications from Arnold's Get Back In Shape guide.
 
 Usage:
-    python arnie.py install            Build Arnie.app and optionally install LaunchAgent
+    python arnie.py install            Build Arnie.app (no LaunchAgent)
+    python arnie.py install-agent      Install the LaunchAgent scheduler
     python arnie.py notify [--force]   Fire one notification now
     python arnie.py status             Show current state and schedule
     python arnie.py log                Print today's exercise log
@@ -186,21 +187,28 @@ def build_notifier():
 
 
 def cmd_install(args):
-    config = load_config()
-
-    # Build the app
+    """Build Arnie.app and set up data directories. Does not touch the LaunchAgent."""
     build_notifier()
 
-    # Create data directories
     APP_SUPPORT_DIR.mkdir(parents=True, exist_ok=True)
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Initialize state if needed
     if not STATE_FILE.exists():
         save_state(default_state())
         print("Initialized state (tier 1, starting today)")
 
-    # Create venv for a stable Python path (for LaunchAgent)
+    print()
+    print(f"Arnie.app built at {NOTIFIER_APP}")
+    print("Launch it directly — it runs its own menu bar timer.")
+    print("If you'd rather schedule via launchd, run 'python arnie.py install-agent'.")
+
+
+def cmd_install_agent(args):
+    """Install the LaunchAgent that fires notifications via the Python CLI."""
+    config = load_config()
+
+    APP_SUPPORT_DIR.mkdir(parents=True, exist_ok=True)
+
     if not VENV_DIR.exists():
         print("Creating virtual environment...")
         subprocess.run(
@@ -211,7 +219,6 @@ def cmd_install(args):
 
     venv_python = VENV_DIR / "bin" / "python3"
 
-    # Generate LaunchAgent plist
     freq = config["frequency_minutes"]
     intervals = []
     for hour in range(config["start_hour"], config["end_hour"]):
@@ -241,7 +248,7 @@ def cmd_install(args):
     subprocess.run(["launchctl", "load", str(PLIST_DEST)], check=True)
     print(f"LaunchAgent loaded (every {freq} min, {config['start_hour']}:00-{config['end_hour'] - 1}:30)")
     print()
-    print("Or just launch Arnie.app directly — it has its own timer and menu bar icon.")
+    print("Warning: if Arnie.app is also running, you'll get duplicate notifications.")
 
 
 def cmd_uninstall(args):
@@ -363,7 +370,8 @@ def main():
     notify_p = sub.add_parser("notify", help="Fire one notification now")
     notify_p.add_argument("--force", action="store_true", help="Ignore work hours check")
 
-    sub.add_parser("install", help="Build Arnie.app and install LaunchAgent")
+    sub.add_parser("install", help="Build Arnie.app (no LaunchAgent)")
+    sub.add_parser("install-agent", help="Install the LaunchAgent scheduler")
     sub.add_parser("uninstall", help="Remove the LaunchAgent")
     sub.add_parser("status", help="Show current state and schedule")
     sub.add_parser("log", help="Print today's exercise log")
@@ -382,6 +390,7 @@ def main():
     commands = {
         "notify": cmd_notify,
         "install": cmd_install,
+        "install-agent": cmd_install_agent,
         "uninstall": cmd_uninstall,
         "status": cmd_status,
         "log": cmd_log,
